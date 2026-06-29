@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>WIADOMOŚCI PRO — Bug w rogu (DOG)</title>
+<!--
+  WIADOMOŚCI PRO — LOGO BUG wg brand guide: poziomy chromowy lockup ///, panel 66% black.
+  1920x1080, tło przezroczyste. URL: ?pos=tr|tl|br|bl  &live=1 (NA ŻYWO + czerwona kropka)
+-->
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--red:#cc0000;--gold:#d6bd60}
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:1920px;height:1080px;overflow:hidden;background:transparent;font-family:'Oswald',sans-serif}
+  .bug{position:absolute;padding:16px 22px 14px;
+    background:linear-gradient(135deg,rgba(10,11,13,.66),rgba(7,7,8,.66));
+    box-shadow:0 10px 30px rgba(0,0,0,.5);
+    clip-path:polygon(0 0,100% 0,calc(100% - 18px) 100%,0 100%);
+    border-top:1px solid rgba(255,255,255,.07);
+    opacity:0;transform:translateY(-12px);animation:in .6s ease .2s forwards}
+  .bug.tr{top:46px;right:60px}.bug.tl{top:46px;left:60px}
+  .bug.br{bottom:46px;right:60px}.bug.bl{bottom:46px;left:60px}
+  .bug img{height:58px;width:auto;display:block;filter:drop-shadow(0 2px 5px rgba(0,0,0,.5))}
+  .thread{height:2px;margin-top:8px;background:linear-gradient(90deg,transparent,var(--gold),transparent);opacity:.7}
+  .live{display:none;align-items:center;gap:9px;margin-top:9px;justify-content:flex-end}
+  .live.on{display:flex}
+  .dot{width:12px;height:12px;border-radius:50%;background:var(--red);box-shadow:0 0 0 0 rgba(204,0,0,.6);animation:pulse 1.4s infinite}
+  .live span{color:#fff;font-weight:700;font-size:17px;letter-spacing:3px}
+  @keyframes in{to{opacity:1;transform:translateY(0)}}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(204,0,0,.6)}70%{box-shadow:0 0 0 13px rgba(204,0,0,0)}100%{box-shadow:0 0 0 0 rgba(204,0,0,0)}}
+</style>
+</head>
+<body>
+  <div class="bug tr" id="bug">
+    <img src="logo-poziom.png" alt="WIADOMOŚCI PRO" style="height:50px">
+    <div class="thread"></div>
+    <div class="live" id="live"><span>NA ŻYWO</span><div class="dot"></div></div>
+  </div>
+<script>
+  const p=new URLSearchParams(location.search);
+  document.getElementById('bug').className='bug '+(p.get('pos')||'tr');
+  if(p.get('live')==='1')document.getElementById('live').classList.add('on');
+</script>
+</body>
+</html>

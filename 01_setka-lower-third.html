@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>WIADOMOŚCI PRO — Setka / Lower Third</title>
+<!--
+  WIADOMOŚCI PRO — SETKA (lower third). Używa OFICJALNEGO designu z setki_oficjalne/ (wektor),
+  z wstrzykiwaniem tekstu + animacją wjazdu/wyjazdu. 1920x1080, tło przezroczyste.
+  URL: ?name=Darius von Prais&title=Prowadzący&temat=Sytuacja gospodarcza&hold=7&loop=1
+       Podaj temat= -> setka PODWÓJNA. Pomiń -> pojedyncza.
+  Font: Noto Sans (jak w oryginale); ładowany z Google Fonts dla zgodności.
+-->
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,800;1,700;1,800;1,900&family=Oswald:wght@500;600&family=Noto+Sans+Display:ital,wght@1,900&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:1920px;height:1080px;overflow:hidden;background:transparent}
+  #stage{position:absolute;inset:0;transform:translateX(-115%);will-change:transform}
+  #stage.in{animation:slideIn .55s cubic-bezier(.16,.84,.3,1) forwards}
+  #stage.out{animation:slideOut .45s cubic-bezier(.7,0,.84,0) forwards}
+  @keyframes slideIn{from{transform:translateX(-115%)}to{transform:translateX(0)}}
+  @keyframes slideOut{from{transform:translateX(0)}to{transform:translateX(160%)}}
+  svg{width:1920px;height:1080px;display:block}
+  /* połysk po panelu */
+  #shine{position:absolute;left:85px;bottom:118px;width:1480px;height:155px;overflow:hidden;pointer-events:none;
+    clip-path:polygon(0 0,100% 0,97% 100%,0 100%)}
+  #shine i{position:absolute;top:0;left:-40%;width:28%;height:100%;
+    background:linear-gradient(105deg,transparent,rgba(255,255,255,.28),transparent);transform:skewX(-16deg);
+    animation:sh 3.6s ease-in-out 1s infinite}
+  @keyframes sh{0%{left:-40%}26%{left:150%}100%{left:150%}}
+</style>
+</head>
+<body>
+  <div id="stage"><div id="holder"></div></div>
+  <div id="shine"><i></i></div>
+<script>
+const SINGLE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080"><g transform="translate(85,820) scale(1.15)">
+<defs>
+<linearGradient id="panel" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#17191c" stop-opacity=".96"/><stop offset="48%" stop-color="#08090a" stop-opacity=".97"/><stop offset="100%" stop-color="#020203" stop-opacity=".98"/></linearGradient>
+<linearGradient id="panelLeft" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#050506" stop-opacity=".98"/><stop offset="100%" stop-color="#141518" stop-opacity=".94"/></linearGradient>
+<linearGradient id="red" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#8c0000"/><stop offset="45%" stop-color="#CC0000"/><stop offset="100%" stop-color="#C8102E"/></linearGradient>
+<linearGradient id="chrome" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FFFFFF"/><stop offset="44%" stop-color="#F4F5F6"/><stop offset="58%" stop-color="#D3D7DD"/><stop offset="100%" stop-color="#8B9099"/></linearGradient>
+<linearGradient id="silverEdge" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f6f7f8"/><stop offset="48%" stop-color="#8B9099"/><stop offset="100%" stop-color="#31343a"/></linearGradient>
+<linearGradient id="gold" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#6f5820" stop-opacity="0"/><stop offset="35%" stop-color="#D6BD60"/><stop offset="52%" stop-color="#fff1a2"/><stop offset="70%" stop-color="#D6BD60"/><stop offset="100%" stop-color="#6f5820" stop-opacity="0"/></linearGradient>
+</defs>
+<polygon points="12,30 1475,30 1430,160 0,160" fill="#000" opacity=".28" transform="translate(0,7)"/>
+<polygon points="0,20 1470,20 1423,151 0,151" fill="url(#panel)" stroke="#72767e" stroke-width="2"/>
+<polygon points="0,20 330,20 293,151 0,151" fill="url(#panelLeft)" stroke="#32353a" stroke-width="1"/>
+<polygon points="303,20 345,20 303,151 261,151" fill="url(#red)"/>
+<polygon points="350,20 375,20 333,151 308,151" fill="#660000" opacity=".85"/>
+<line x1="378" y1="21" x2="1438" y2="21" stroke="#C8102E" stroke-width="2" opacity=".75"/>
+<circle cx="1375" cy="21" r="8" fill="#ff3649" opacity=".45"/><circle cx="1375" cy="21" r="3.5" fill="#fff"/>
+<polygon points="1470,20 1500,20 1455,151 1423,151" fill="url(#silverEdge)"/>
+<line x1="0" y1="151" x2="1435" y2="151" stroke="#D6BD60" stroke-width="3"/>
+<line x1="540" y1="153" x2="1180" y2="153" stroke="url(#gold)" stroke-width="7" opacity=".9"/>
+<g transform="translate(28,36) scale(0.82)">
+<text x="0" y="34" font-family="'Noto Sans Display'" font-size="40" font-weight="900" font-style="italic" letter-spacing="-1.5" fill="url(#chrome)" stroke="#42464d" stroke-width="1.2">WIADOMOŚCI</text>
+<polygon points="0,50 24,50 14,78 -10,78" fill="#CC0000"/><polygon points="30,50 54,50 44,78 20,78" fill="#CC0000"/><polygon points="60,50 84,50 74,78 50,78" fill="#CC0000"/>
+<polygon points="91,50 218,50 205,78 78,78" fill="url(#red)"/>
+<text x="222" y="78" font-family="'Noto Sans Display'" font-size="48" font-weight="900" font-style="italic" fill="url(#chrome)" stroke="#42464d" stroke-width="1.2">PRO</text>
+</g>
+<text id="t_name" x="408" y="84" font-family="Archivo,'Arial Black',sans-serif" font-size="52" font-weight="800" font-style="italic" letter-spacing=".4" fill="url(#chrome)" stroke="#1a1b1e" stroke-width="1.1"></text>
+<text id="t_title" x="410" y="125" font-family="Oswald,sans-serif" font-size="29" font-weight="600" letter-spacing="2" fill="#D7D9DD"></text>
+</g></svg>`;
+
+const DOUBLE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080"><g transform="translate(85,755) scale(1.15)">
+<defs>
+<linearGradient id="panel" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#17191c" stop-opacity=".96"/><stop offset="48%" stop-color="#08090a" stop-opacity=".97"/><stop offset="100%" stop-color="#020203" stop-opacity=".98"/></linearGradient>
+<linearGradient id="panelLeft" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#050506" stop-opacity=".98"/><stop offset="100%" stop-color="#141518" stop-opacity=".94"/></linearGradient>
+<linearGradient id="red" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#8c0000"/><stop offset="45%" stop-color="#CC0000"/><stop offset="100%" stop-color="#C8102E"/></linearGradient>
+<linearGradient id="redDark" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#5f0000"/><stop offset="55%" stop-color="#a60000"/><stop offset="100%" stop-color="#4e0000"/></linearGradient>
+<linearGradient id="chrome" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FFFFFF"/><stop offset="44%" stop-color="#F4F5F6"/><stop offset="58%" stop-color="#D3D7DD"/><stop offset="100%" stop-color="#8B9099"/></linearGradient>
+<linearGradient id="silverEdge" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f6f7f8"/><stop offset="48%" stop-color="#8B9099"/><stop offset="100%" stop-color="#31343a"/></linearGradient>
+<linearGradient id="gold" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#6f5820" stop-opacity="0"/><stop offset="35%" stop-color="#D6BD60"/><stop offset="52%" stop-color="#fff1a2"/><stop offset="70%" stop-color="#D6BD60"/><stop offset="100%" stop-color="#6f5820" stop-opacity="0"/></linearGradient>
+</defs>
+<polygon points="12,30 1475,30 1430,160 0,160" fill="#000" opacity=".28" transform="translate(0,7)"/>
+<polygon points="0,20 1470,20 1423,151 0,151" fill="url(#panel)" stroke="#72767e" stroke-width="2"/>
+<polygon points="0,20 330,20 293,151 0,151" fill="url(#panelLeft)" stroke="#32353a" stroke-width="1"/>
+<polygon points="303,20 345,20 303,151 261,151" fill="url(#red)"/>
+<polygon points="350,20 375,20 333,151 308,151" fill="#660000" opacity=".85"/>
+<line x1="378" y1="21" x2="1438" y2="21" stroke="#C8102E" stroke-width="2" opacity=".75"/>
+<circle cx="1375" cy="21" r="8" fill="#ff3649" opacity=".45"/><circle cx="1375" cy="21" r="3.5" fill="#fff"/>
+<polygon points="1470,20 1500,20 1455,151 1423,151" fill="url(#silverEdge)"/>
+<line x1="0" y1="151" x2="1435" y2="151" stroke="#D6BD60" stroke-width="3"/>
+<line x1="540" y1="153" x2="1180" y2="153" stroke="url(#gold)" stroke-width="7" opacity=".9"/>
+<g transform="translate(28,36) scale(0.82)">
+<text x="0" y="34" font-family="'Noto Sans Display'" font-size="40" font-weight="900" font-style="italic" letter-spacing="-1.5" fill="url(#chrome)" stroke="#42464d" stroke-width="1.2">WIADOMOŚCI</text>
+<polygon points="0,50 24,50 14,78 -10,78" fill="#CC0000"/><polygon points="30,50 54,50 44,78 20,78" fill="#CC0000"/><polygon points="60,50 84,50 74,78 50,78" fill="#CC0000"/>
+<polygon points="91,50 218,50 205,78 78,78" fill="url(#red)"/>
+<text x="222" y="78" font-family="'Noto Sans Display'" font-size="48" font-weight="900" font-style="italic" fill="url(#chrome)" stroke="#42464d" stroke-width="1.2">PRO</text>
+</g>
+<text id="t_name" x="408" y="84" font-family="Archivo,'Arial Black',sans-serif" font-size="52" font-weight="800" font-style="italic" letter-spacing=".4" fill="url(#chrome)" stroke="#1a1b1e" stroke-width="1.1"></text>
+<text id="t_title" x="410" y="125" font-family="Oswald,sans-serif" font-size="29" font-weight="600" letter-spacing="2" fill="#D7D9DD"></text>
+<polygon points="305,157 1430,157 1405,228 282,228" fill="#000" opacity=".3" transform="translate(0,4)"/>
+<polygon points="305,157 1430,157 1405,222 282,222" fill="url(#redDark)" stroke="#C8102E" stroke-width="2"/>
+<polygon points="305,157 345,157 322,222 282,222" fill="url(#red)"/>
+<polygon points="1430,157 1460,157 1435,222 1405,222" fill="url(#silverEdge)"/>
+<line x1="292" y1="221" x2="1410" y2="221" stroke="#D6BD60" stroke-width="3"/>
+<text id="t_temat" x="410" y="204" font-family="Archivo,'Arial Black',sans-serif" font-size="38" font-weight="800" font-style="italic" letter-spacing=".3" fill="url(#chrome)" stroke="#461010" stroke-width="0.8"></text>
+</g></svg>`;
+
+const p=new URLSearchParams(location.search);
+const temat=p.get('temat');
+const holder=document.getElementById('holder');
+holder.innerHTML = temat ? DOUBLE : SINGLE;
+holder.querySelector('#t_name').textContent  = (p.get('name')||'DARIUS VON PRAIS').toUpperCase();
+holder.querySelector('#t_title').textContent = (p.get('title')||'PROWADZĄCY').toUpperCase();
+if(temat) holder.querySelector('#t_temat').textContent = 'TEMAT: '+temat.toUpperCase();
+
+const hold=(parseFloat(p.get('hold'))||7)*1000, loop=p.get('loop')!=='0', stage=document.getElementById('stage');
+function cyc(){
+  stage.classList.remove('out');stage.classList.remove('in');void stage.offsetWidth;stage.classList.add('in');
+  if(loop){setTimeout(()=>{stage.classList.remove('in');stage.classList.add('out');},hold);setTimeout(cyc,hold+700);}
+}
+cyc();
+</script>
+</body>
+</html>

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>WIADOMOŚCI PRO — Karta Social</title>
+<!--
+  WIADOMOŚCI PRO — UNIWERSALNA KARTA SOCIAL. Jeden szablon, wiele formatów.
+  URL params:
+    format = post45 (1080x1350) | square (1080x1080) | story (1080x1920) | thumb (1280x720) | og (1200x630)
+    head   = nagłówek (tekst)
+    dzial  = dział/kategoria (KRAJ, ŚWIAT, SPORT, BIZNES, POGODA, PILNE...)
+    img    = URL/ścieżka zdjęcia tła
+    pilne  = 1  -> badge PILNE (breaking)
+    zrodlo = podpis źródła (opcjonalnie)
+  Eksport: otwórz w przeglądarce, zrzut ekranu karty, albo html2canvas w CMS.
+-->
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,700;0,800;1,800;1,900&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--red:#cc0000;--red-hi:#ec1c1c;--red-lo:#8f0000;--gold:#d6bd60;--gold-hi:#ffe79a}
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{background:#0a0a0a;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:'Oswald',sans-serif}
+  #card{position:relative;overflow:hidden;background:#070708;--u:10.8px}
+  .bg{position:absolute;inset:0;background-size:cover;background-position:center;background-color:#15171c}
+  .bg:after{content:"";position:absolute;inset:0;
+    background:linear-gradient(180deg,rgba(7,7,8,.55) 0%,rgba(7,7,8,.05) 32%,rgba(7,7,8,.55) 62%,rgba(7,7,8,.96) 100%);}
+  .vign{position:absolute;inset:0;box-shadow:inset 0 0 calc(var(--u)*18) rgba(0,0,0,.7)}
+  /* czerwone smugi */
+  .streak{position:absolute;width:160%;height:calc(var(--u)*.5);background:linear-gradient(90deg,transparent,rgba(204,0,0,.5),transparent);transform:rotate(-26deg);left:-30%}
+  .s1{top:14%}.s2{top:84%;opacity:.6}
+
+  /* TOP: logo + dział */
+  .top{position:absolute;top:calc(var(--u)*4);left:calc(var(--u)*4.2);right:calc(var(--u)*4.2);display:flex;align-items:flex-start;justify-content:space-between;gap:calc(var(--u)*2)}
+  .top .logo{height:calc(var(--u)*7.2);filter:drop-shadow(0 calc(var(--u)*.4) calc(var(--u)*1) rgba(0,0,0,.6))}
+  .tab{position:relative;display:flex;align-items:center;height:calc(var(--u)*5);padding:0 calc(var(--u)*3.2);
+    background:linear-gradient(180deg,var(--red-hi),var(--red) 55%,var(--red-lo));
+    clip-path:polygon(calc(var(--u)*1.6) 0,100% 0,calc(100% - var(--u)*1.6) 100%,0 100%);
+    box-shadow:0 calc(var(--u)*.8) calc(var(--u)*2) rgba(160,0,0,.4)}
+  .tab b{color:#fff;font-family:'Archivo',sans-serif;font-weight:800;font-style:italic;font-size:calc(var(--u)*2.4);letter-spacing:1px;text-transform:uppercase}
+  .tab .sl{display:flex;gap:calc(var(--u)*.45);margin-left:calc(var(--u)*1.4)}
+  .tab .sl i{width:calc(var(--u)*.7);height:calc(var(--u)*2.6);background:#fff;transform:skewX(-18deg)}
+  .tab .sl i:nth-child(1){opacity:.5}.tab .sl i:nth-child(2){opacity:.75}
+
+  /* PILNE badge */
+  .pilne{position:absolute;top:calc(var(--u)*4);left:calc(var(--u)*4.2);display:none;align-items:center;height:calc(var(--u)*5);padding:0 calc(var(--u)*3);
+    background:linear-gradient(180deg,var(--red-hi),var(--red-lo));clip-path:polygon(0 0,100% 0,calc(100% - var(--u)*1.6) 100%,0 100%)}
+  .pilne b{color:#fff;font-family:'Archivo',sans-serif;font-weight:900;font-style:italic;font-size:calc(var(--u)*2.6);letter-spacing:2px}
+  body.is-pilne .top .tab{display:none}
+  body.is-pilne .pilne{display:flex}
+
+  /* BOTTOM: nagłówek */
+  .btm{position:absolute;left:calc(var(--u)*4.2);right:calc(var(--u)*4.2);bottom:calc(var(--u)*6.5)}
+  .thread{height:calc(var(--u)*.32);width:38%;background:linear-gradient(90deg,var(--gold-hi),var(--gold),transparent);margin-bottom:calc(var(--u)*2.4)}
+  .head{color:#fff;font-family:'Archivo',sans-serif;font-weight:800;font-style:italic;line-height:1.04;letter-spacing:.3px;text-transform:uppercase;
+    font-size:calc(var(--u)*6.2);text-shadow:0 calc(var(--u)*.4) calc(var(--u)*1.6) rgba(0,0,0,.8)}
+  .src{margin-top:calc(var(--u)*2);color:#cfd3d8;font-weight:500;font-size:calc(var(--u)*1.8);letter-spacing:1px;text-transform:uppercase;opacity:.85}
+
+  /* dolny pasek marki */
+  .brand{position:absolute;left:0;right:0;bottom:0;height:calc(var(--u)*4.6);background:linear-gradient(180deg,rgba(7,7,8,.2),#070708);
+    display:flex;align-items:center;justify-content:space-between;padding:0 calc(var(--u)*4.2);border-top:calc(var(--u)*.22) solid var(--gold)}
+  .brand .w{color:#fff;font-weight:600;font-size:calc(var(--u)*1.85);letter-spacing:2px}
+  .brand .t{color:var(--gold);font-weight:600;font-size:calc(var(--u)*1.6);letter-spacing:3px;text-transform:uppercase}
+
+  /* warianty landscape: większy nagłówek po lewej, węższy */
+  body.land .btm{right:38%}
+  body.land .head{font-size:calc(var(--u)*7)}
+  body.story .head{font-size:calc(var(--u)*7.4)}
+  body.story .btm{bottom:calc(var(--u)*16)}
+</style>
+</head>
+<body>
+  <div id="card">
+    <div class="bg" id="bg"></div>
+    <div class="vign"></div>
+    <div class="streak s1"></div><div class="streak s2"></div>
+    <div class="pilne"><b id="pilneTxt">PILNE</b></div>
+    <div class="top">
+      <img class="logo" src="logo-poziom.png" alt="WIADOMOŚCI PRO" id="logo">
+      <div class="tab"><b id="dzial">KRAJ</b><span class="sl"><i></i><i></i><i></i></span></div>
+    </div>
+    <div class="btm">
+      <div class="thread"></div>
+      <div class="head" id="head">Nagłówek wiadomości w tym miejscu</div>
+      <div class="src" id="src"></div>
+    </div>
+    <div class="brand"><span class="w">www.wiadomości.pro</span><span class="t">Fakty · Perspektywa · Prawda</span></div>
+  </div>
+<script>
+  const SIZES={post45:[1080,1350],square:[1080,1080],story:[1080,1920],thumb:[1280,720],og:[1200,630]};
+  const p=new URLSearchParams(location.search);
+  const fmt=p.get('format')||'post45';
+  const [W,H]=SIZES[fmt]||SIZES.post45;
+  const card=document.getElementById('card');
+  card.style.width=W+'px';card.style.height=H+'px';
+  card.style.setProperty('--u',(W/100)+'px');
+  if(fmt==='thumb'||fmt==='og')document.body.classList.add('land');
+  if(fmt==='story')document.body.classList.add('story');
+  if(p.get('head'))document.getElementById('head').textContent=p.get('head');
+  if(p.get('dzial'))document.getElementById('dzial').textContent=p.get('dzial').toUpperCase();
+  if(p.get('zrodlo'))document.getElementById('src').textContent='Źródło: '+p.get('zrodlo');
+  if(p.get('img'))document.getElementById('bg').style.backgroundImage=`url('${p.get('img')}')`;
+  if(p.get('pilne')==='1'){document.body.classList.add('is-pilne');if(p.get('dzial'))document.getElementById('pilneTxt').textContent=p.get('dzial').toUpperCase();}
+</script>
+</body>
+</html>

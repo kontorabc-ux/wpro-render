@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>WIADOMOŚCI PRO — Stinger / Przejście</title>
+<!--
+  WIADOMOŚCI PRO — STINGER (przejście "logo przebijające") 1920x1080, tło przezroczyste.
+  To jest przebitka MIĘDZY ujęciami / przy zmianie tematu.
+  ~1,6 s: czerwono-chromowe panele wjeżdżają, logo "uderza" na środku, panele wyjeżdżają.
+  UŻYCIE:
+    - Monaż: nagraj jeden przebieg (auto-play) i wstaw między klipy. Tło przezroczyste = działa jako maska.
+    - OBS Stinger Transition: użyj WERSJI .mp4 (z AI/nagrania) — OBS wymaga pliku wideo.
+  STEROWANIE: kliknij ekran = powtórz. URL ?topic=KRAJ (tekst na panelu), ?loop=1 (powtarzaj).
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,800;1,800&family=Oswald:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--red:#cc0000;--red2:#8f0000;--gold:#d6bd60}
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:1920px;height:1080px;overflow:hidden;background:transparent;font-family:'Oswald',sans-serif}
+  .stage{position:absolute;inset:0}
+
+  /* dwa panele zamykające ekran (góra ciemny, dół czerwony) */
+  .panel{position:absolute;left:0;width:100%;height:51%;will-change:transform}
+  .top{top:0;background:linear-gradient(180deg,#141518,#070708);transform:translateX(-105%)}
+  .bot{bottom:0;background:linear-gradient(180deg,var(--red),var(--red2));transform:translateX(105%)}
+  /* skośna krawędź styku */
+  .top:after{content:"";position:absolute;bottom:-2px;left:0;width:100%;height:6px;background:var(--gold);opacity:.9}
+
+  /* logo na środku */
+  .logo{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    opacity:0;transform:scale(.6)}
+  .logo img{height:440px;width:auto;display:block;filter:drop-shadow(0 16px 44px rgba(0,0,0,.6))}
+  .logo .tag{margin-top:18px;color:var(--gold);font-family:'Oswald',sans-serif;font-weight:600;letter-spacing:10px;font-size:26px;text-transform:uppercase;text-align:center}
+
+  /* opcjonalny napis tematu */
+  .topic{position:absolute;left:0;right:0;bottom:120px;text-align:center;color:#fff;
+    font-weight:700;font-size:34px;letter-spacing:10px;text-transform:uppercase;opacity:0}
+
+  /* poziomy błysk przecięcia */
+  .flash{position:absolute;top:50%;left:-30%;width:160%;height:8px;transform:translateY(-50%);
+    background:linear-gradient(90deg,transparent,#fff,transparent);opacity:0}
+
+  .run .top{animation:slideTop 1.6s cubic-bezier(.7,0,.2,1) forwards}
+  .run .bot{animation:slideBot 1.6s cubic-bezier(.7,0,.2,1) forwards}
+  .run .logo{animation:logoPunch 1.6s cubic-bezier(.2,1.3,.3,1) forwards}
+  .run .topic{animation:topicIn 1.6s ease forwards}
+  .run .flash{animation:flash 1.6s ease forwards}
+
+  /* panele: wjazd (0-35%), trzymanie, wyjazd (62-100%) */
+  @keyframes slideTop{
+    0%{transform:translateX(-105%)}30%{transform:translateX(0)}62%{transform:translateX(0)}100%{transform:translateX(105%)}}
+  @keyframes slideBot{
+    0%{transform:translateX(105%)}30%{transform:translateX(0)}62%{transform:translateX(0)}100%{transform:translateX(-105%)}}
+  @keyframes logoPunch{
+    0%,26%{opacity:0;transform:scale(.55)}38%{opacity:1;transform:scale(1.06)}46%{transform:scale(1)}58%{opacity:1;transform:scale(1)}66%{opacity:0;transform:scale(1.12)}100%{opacity:0}}
+  @keyframes topicIn{0%,30%{opacity:0;transform:translateY(20px)}42%{opacity:1;transform:translateY(0)}58%{opacity:1}66%{opacity:0}100%{opacity:0}}
+  @keyframes flash{0%,28%{opacity:0;left:-30%}33%{opacity:.9;left:0%}40%{opacity:0;left:30%}100%{opacity:0}}
+</style>
+</head>
+<body>
+  <div class="stage run" id="stage">
+    <div class="panel top"></div>
+    <div class="panel bot"></div>
+    <div class="flash"></div>
+    <div class="logo">
+      <img src="logo-glowne.png" alt="WIADOMOŚCI PRO">
+    </div>
+    <div class="topic" id="topic"></div>
+  </div>
+<script>
+  const p=new URLSearchParams(location.search);
+  const t=p.get('topic'); if(t){document.getElementById('topic').textContent=t.toUpperCase();}
+  const stage=document.getElementById('stage');
+  function play(){stage.classList.remove('run');void stage.offsetWidth;stage.classList.add('run');}
+  document.body.addEventListener('click',play);
+  if(p.get('loop')==='1'){setInterval(play,2600);}
+</script>
+</body>
+</html>

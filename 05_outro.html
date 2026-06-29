@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>WIADOMOŚCI PRO — Outro / End card</title>
+<!--
+  WIADOMOŚCI PRO — OUTRO (pakiet końcowy) wg brand guide.
+  Logo + tagline + podziękowanie + CTA (strona + subskrypcja). 1920x1080.
+  URL: ?www=wiadomości.pro&thanks=Dziękujemy za oglądanie
+-->
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--red:#cc0000;--gold:#d6bd60;--gold-hi:#ffe79a}
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:1920px;height:1080px;overflow:hidden;background:#070708;font-family:'Oswald',sans-serif}
+  .bg{position:absolute;inset:0;background:radial-gradient(120% 100% at 50% 35%,#15171c,#070708 72%)}
+  .streak{position:absolute;width:150%;height:4px;background:linear-gradient(90deg,transparent,rgba(204,0,0,.5),transparent);transform:rotate(-26deg)}
+  .s1{top:22%;left:-25%}.s2{top:70%;left:-10%;opacity:.6}
+  .wrap{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:2}
+  .logo{height:230px;filter:drop-shadow(0 12px 30px rgba(0,0,0,.6));opacity:0;transform:scale(.94);animation:in .8s cubic-bezier(.2,1,.3,1) .2s forwards}
+  .tag{color:var(--gold);font-weight:600;letter-spacing:9px;font-size:24px;text-transform:uppercase;margin-top:8px;opacity:0;animation:fade .6s ease .6s forwards}
+  .thanks{color:#fff;font-family:'Archivo',sans-serif;font-weight:800;font-size:46px;letter-spacing:1px;text-transform:uppercase;margin-top:34px;opacity:0;animation:fade .6s ease .9s forwards}
+  .thread{width:560px;height:3px;margin-top:20px;background:linear-gradient(90deg,transparent,var(--gold-hi),var(--gold),transparent);opacity:0;animation:fade .6s ease 1s forwards}
+  .cta{display:flex;gap:60px;margin-top:34px;opacity:0;animation:fade .6s ease 1.15s forwards}
+  .cta div{display:flex;align-items:center;gap:14px;color:#fff}
+  .cta .ic{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;flex:none}
+  .cta .web .ic{border:2px solid var(--red);color:var(--red)}
+  .cta .yt .ic{background:#ff0000}
+  .cta small{display:block;font-size:18px;color:#aab0b8;letter-spacing:1px;text-transform:uppercase}
+  .cta b{font-size:26px;color:#fff;font-weight:600}
+  .cta .yt b{color:#ff4646}
+  @keyframes in{to{opacity:1;transform:scale(1)}}
+  @keyframes fade{to{opacity:1}}
+</style>
+</head>
+<body>
+  <div class="bg"></div>
+  <div class="streak s1"></div><div class="streak s2"></div>
+  <div class="wrap">
+    <img class="logo" src="logo-glowne.png" alt="WIADOMOŚCI PRO">
+    <div class="thanks" id="thanks">DZIĘKUJEMY ZA OGLĄDANIE</div>
+    <div class="thread"></div>
+    <div class="cta">
+      <div class="web"><span class="ic">🌐</span><span><small>Więcej informacji na</small><b id="www">wiadomości.pro</b></span></div>
+      <div class="yt"><span class="ic">▶</span><span><small>Bądź na bieżąco</small><b>Subskrybuj</b></span></div>
+    </div>
+  </div>
+<script>
+  const p=new URLSearchParams(location.search);
+  if(p.get('www'))document.getElementById('www').textContent=p.get('www');
+  if(p.get('thanks'))document.getElementById('thanks').textContent=p.get('thanks').toUpperCase();
+</script>
+</body>
+</html>

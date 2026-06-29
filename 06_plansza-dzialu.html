@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>WIADOMOŚCI PRO — Plansza działu</title>
+<!--
+  WIADOMOŚCI PRO — PLANSZA DZIAŁU (topic bumper) wg brand guide.
+  Pełny ekran: logo u góry, wielka chromowa nazwa, skośny czerwony pas z /// + złota nić.
+  1920x1080. URL: ?temat=KRAJ&bg=sciezka/do/tla.jpg (tło opcjonalne)
+-->
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,800;1,800&family=Oswald:wght@600&display=swap" rel="stylesheet">
+<style>
+  :root{--red:#cc0000;--red-hi:#ec1c1c;--red-lo:#8f0000;--gold:#d6bd60;--gold-hi:#ffe79a}
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:1920px;height:1080px;overflow:hidden;background:#070708;font-family:'Oswald',sans-serif}
+  .bg{position:absolute;inset:0;background:radial-gradient(120% 90% at 70% 20%,#1a1c22,#070708 70%);z-index:0}
+  .bg.img{background-size:cover;background-position:center}
+  .bg:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(7,7,8,.85),rgba(7,7,8,.35) 60%,rgba(204,0,0,.12));}
+  /* skośne czerwone smugi */
+  .streak{position:absolute;width:140%;height:5px;background:linear-gradient(90deg,transparent,rgba(204,0,0,.55),transparent);transform:rotate(-28deg);z-index:1}
+  .s1{top:18%;left:-20%}.s2{top:74%;left:-10%;opacity:.6}
+  .logo{position:absolute;top:80px;left:50%;transform:translateX(-50%);z-index:3;
+    opacity:0;animation:fade .6s ease .2s forwards}
+  .logo img{height:96px;filter:drop-shadow(0 6px 16px rgba(0,0,0,.6))}
+  .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:3}
+  .name{font-family:'Archivo',sans-serif;font-weight:800;font-style:italic;font-size:230px;line-height:.9;letter-spacing:2px;
+    background:linear-gradient(180deg,#fff 0%,#eef0f2 40%,#cdd2d8 58%,#8b9099 78%,#f2f4f6 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 10px 26px rgba(0,0,0,.55));text-transform:uppercase;
+    transform:translateY(40px) scale(.92);opacity:0;animation:pop .7s cubic-bezier(.2,1.2,.3,1) .35s forwards}
+  /* skośny czerwony pas z /// */
+  .bar{margin-top:26px;width:760px;height:78px;position:relative;
+    background:linear-gradient(180deg,var(--red-hi),var(--red) 55%,var(--red-lo));
+    clip-path:polygon(40px 0,100% 0,calc(100% - 40px) 100%,0 100%);
+    transform:scaleX(0);transform-origin:left;animation:grow .5s cubic-bezier(.16,.84,.3,1) .6s forwards;
+    box-shadow:0 14px 34px rgba(160,0,0,.4)}
+  .bar .slash{position:absolute;right:46px;top:0;height:78px;display:flex;align-items:center;gap:9px}
+  .bar .slash i{width:12px;height:46px;background:#fff;transform:skewX(-18deg);opacity:.9}
+  .bar .slash i:nth-child(1){opacity:.5}.bar .slash i:nth-child(2){opacity:.72}
+  .thread{width:760px;height:3px;margin-top:6px;background:linear-gradient(90deg,transparent,var(--gold-hi),var(--gold),transparent);
+    opacity:0;animation:fade .5s ease .9s forwards}
+  @keyframes fade{to{opacity:1}}
+  @keyframes pop{to{transform:translateY(0) scale(1);opacity:1}}
+  @keyframes grow{to{transform:scaleX(1)}}
+</style>
+</head>
+<body>
+  <div class="bg" id="bg"></div>
+  <div class="streak s1"></div><div class="streak s2"></div>
+  <div class="logo"><img src="logo-lockup-rr.png" alt="WIADOMOŚCI PRO"></div>
+  <div class="center">
+    <div class="name" id="name">KRAJ</div>
+    <div class="bar"><div class="slash"><i></i><i></i><i></i></div></div>
+    <div class="thread"></div>
+  </div>
+<script>
+  const p=new URLSearchParams(location.search);
+  if(p.get('temat'))document.getElementById('name').textContent=p.get('temat').toUpperCase();
+  if(p.get('bg')){const b=document.getElementById('bg');b.classList.add('img');b.style.backgroundImage=`url('${p.get('bg')}')`;}
+</script>
+</body>
+</html>

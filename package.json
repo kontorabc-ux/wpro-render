@@ -1,0 +1,15 @@
+{
+  "name": "wpro-render-service",
+  "version": "1.0.0",
+  "description": "WIADOMOŚCI PRO — mikroserwis renderujący grafiki (Puppeteer): karty social + overlaye broadcast do PNG (alfa).",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "express": "^4.19.2",
+    "puppeteer": "^22.12.0"
+  }
+}
