@@ -36,6 +36,15 @@ const MAX_CLIPS  = 200;
 const JOB_TTL_MS = 60 * 60 * 1000;            // gotowy plik żyje godzinę
 const PRESET     = process.env.FF_PRESET || 'veryfast';
 const CRF        = process.env.FF_CRF || '21';
+/* WĄTKI x264 — NAJWAŻNIEJSZA POKRĘTKA PAMIĘCI (lekcja z 15.07).
+   Kontener na Render widzi rdzenie HOSTA, więc x264 sam z siebie odpala
+   ~1,5×rdzenie wątków i każdy bierze własne bufory klatek: zmierzone
+   1080p veryfast = 320-430 MB → instancja 512 MB ginie („Ran out of memory"),
+   i to BEZ żadnego Chromium. Przy threads=2 ten sam render mieści się
+   w ~245 MB (pełny łańcuch z dekodowaniem ~320 MB). */
+const THREADS    = process.env.FF_THREADS || '2';
+const X264 = () => ['-threads', THREADS, '-x264-params',
+  'threads=' + THREADS + ':lookahead-threads=1:sliced-threads=0'];
 
 const jobs = new Map();
 let queue = Promise.resolve();
@@ -291,7 +300,8 @@ async function normalizeClip(c, file, out, W, H, job) {
   args.push('-map', hasAudio ? '[a]' : '2:a');
 
   args.push('-t', String(eff),
-    '-c:v', 'libx264', '-preset', PRESET, '-crf', CRF, '-pix_fmt', 'yuv420p', '-r', String(FPS),
+    '-c:v', 'libx264', '-preset', PRESET, '-crf', CRF, ...X264(),
+    '-pix_fmt', 'yuv420p', '-r', String(FPS),
     '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2', out);
 
   await ffmpeg(args);
@@ -416,7 +426,8 @@ async function finalPass(job, dir, base, overlayPng, textPngs, total, W, H) {
   if (fc.length) final.push('-filter_complex', fc.join(';'));
   final.push('-map', vlab === '[0:v]' ? '0:v' : vlab,
     '-map', alab, '-t', String(total),
-    '-c:v', 'libx264', '-preset', PRESET, '-crf', CRF, '-pix_fmt', 'yuv420p', '-r', String(FPS),
+    '-c:v', 'libx264', '-preset', PRESET, '-crf', CRF, ...X264(),
+    '-pix_fmt', 'yuv420p', '-r', String(FPS),
     '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart',
     '-progress', 'pipe:1', '-nostats', out);
 

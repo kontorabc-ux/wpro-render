@@ -84,13 +84,25 @@ naraz — 512 MB RAM planu Free nie zniesie dwóch ffmpegów). Gotowy plik żyje
 - ✅ `node --check` dla `montage.js` i klienta; kod wycięty do `text-layer.html` parsuje się.
 - ✅ ścieżka napisów z rastrem od klienta + strumieniowe pobieranie: render bez `warn`.
 
-## ⚠️ RAM: dlaczego napisów NIE renderuje Puppeteer (lekcja z 15.07)
+## ⚠️ RAM na 512 MB — trzy przyczyny OOM (lekcja z 15.07)
 
-Pierwsza wersja rysowała napisy Chromium na serwerze. Render.com zabił instancję dwa razy:
-**„Ran out of memory (used over 512MB)"** — Chromium + ffmpeg nie mieszczą się na Free
-(uwaga: **Starter $7 też ma 512 MB** — RAM daje dopiero Standard 2 GB / $25).
+Render zabijał instancję przy każdym renderze: **„Ran out of memory (used over 512MB)"**.
+(Uwaga: **Starter $7 też ma 512 MB** — RAM daje dopiero Standard 2 GB / $25.)
 
-Zamiast dokładać pieniędzy zmieniliśmy architekturę:
+**Najważniejsza przyczyna to `x264`, nie Chromium.** Kontener widzi rdzenie HOSTA, więc x264
+odpala ~1,5×rdzenie wątków, a każdy trzyma własne bufory klatek. Zmierzone (1080p, 3 s):
+
+| ustawienie | szczyt RSS ffmpeg |
+|---|---|
+| domyślne wątki, `veryfast` | **433 MB** (pełny łańcuch) / 319 MB (sam enkoder) |
+| `-threads 1` | 207 MB |
+| **`-threads 2` (obecne)** | **245 MB** (pełny łańcuch z dekodowaniem: **314 MB**) |
+| `ultrafast` | 141 MB |
+
+Stąd `FF_THREADS=2` + `-x264-params threads=2:lookahead-threads=1:sliced-threads=0`.
+Gdyby OOM wrócił: `FF_THREADS=1` albo `FF_PRESET=ultrafast`.
+
+Dwie pozostałe przyczyny (usunięte):
 1. **napisy rasteryzuje Studio** (`rasterTexts` — prawdziwy `montDrawTexts` na canvasie) i wysyła
    jako PNG w JSON-ie. Jest **wierniej** (te same fonty/presety/karaoke) i bez Chromium na serwerze.
    Na iOS działa — Safari wywraca się na `MediaRecorder`/`ctx.filter`, nie na rysowaniu tekstu.
@@ -115,4 +127,5 @@ tylko na instancji ≥2 GB.
 - `CORS_ORIGINS` — domyślnie `https://www.wiadomosci.pro,https://wiadomosci.pro`
 - `RENDER_TOKEN` — jeśli ustawisz, Studio musi wysyłać `Authorization: Bearer …`. **Dziś puste
   = endpoint otwarty** (tak jak reszta serwisu). Do utwardzenia osobno.
-- `FF_PRESET` (domyślnie `veryfast`), `FF_CRF` (`21`).
+- `FF_PRESET` (domyślnie `veryfast`), `FF_CRF` (`21`), **`FF_THREADS` (`2` — patrz sekcja o RAM)**
+- `MONTAGE_PUPPETEER=1` — włącza serwerowe rysowanie napisów (tylko instancja ≥2 GB).
