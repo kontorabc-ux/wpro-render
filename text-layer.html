@@ -1,0 +1,484 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>WPRO — warstwa napisów (render serwerowy)</title>
+<!-- WYGENEROWANE AUTOMATYCZNIE przez build-text-layer.mjs — nie edytuj ręcznie.
+     Źródło: cms/studio-text.js (linie 1-437), 2026-07-15T14:34:46.589Z -->
+<style>html,body{margin:0;background:transparent}canvas{display:block}</style>
+<canvas id="cv"></canvas>
+<script>
+/* Namiastki globali ze studio.php, na których opiera się montDrawTexts */
+window.MONT = { texts: [], preset: null };
+window.montCanvas = document.getElementById('cv');
+window.montCtx = window.montCanvas.getContext('2d');
+window.montRenderTexts = function(){};
+window.montDrawStatic  = function(){};
+window.montSelect      = function(){};
+window.aiSay           = function(){};
+</script>
+<script>
+/* ══════════════════════════════════════════════════════════════════════════
+   WIADOMOŚCI PRO — STUDIO / EDYTOR TEKSTU I NAPISÓW 4.0
+   Inspiracja: CapCut (edycja) + Opus Clip (napisy karaoke)
+
+   Co daje:
+   • swobodne przeciąganie, skalowanie i obracanie tekstu wprost po kadrze
+   • 14 czcionek (Anton, Bebas, Montserrat Black, Inter Black, Bangers…)
+   • kolor tekstu, obrys, cień/poświata, tło (blok / linia / słowo) — własny kolor + krycie
+   • wersaliki, odstępy liter, interlinia, wyrównanie, obrót, krycie
+   • animacje wejścia i wyjścia (fade, wjazd, pop, zoom, maszyna do pisania)
+   • KARAOKE słowo-po-słowie (podświetlanie aktywnego słowa) — jak Opus Clip
+   • 12 gotowych stylów napisów + „zastosuj do wszystkich" (naprawia napisy z transkrypcji)
+   • 20 efektów obrazu, ruch kamery (Ken Burns) i 12 przejść — w podglądzie i w renderze
+
+   Plik NADPISUJE funkcje ze studio.php (montDrawTexts, montDrawFrame, fxFilter,
+   montRenderTexts, montAddText, montSelect) — dlatego ładuje się PO nim.
+   ══════════════════════════════════════════════════════════════════════════ */
+(function(){
+'use strict';
+
+/* ── 1. CZCIONKI ─────────────────────────────────────────────────────────── */
+const FONTS = [
+  {id:'Anton',            n:'Anton — gruby plakat',        w:[400]},
+  {id:'Bebas Neue',       n:'Bebas Neue — wąski TV',       w:[400]},
+  {id:'Oswald',           n:'Oswald — redakcyjny',         w:[400,600,700]},
+  {id:'Montserrat',       n:'Montserrat — Black',          w:[700,900]},
+  {id:'Inter',            n:'Inter — Black (Opus)',        w:[400,600,900]},
+  {id:'Poppins',          n:'Poppins — okrągły',           w:[600,800]},
+  {id:'Archivo Black',    n:'Archivo Black — ciężki',      w:[400]},
+  {id:'Rubik',            n:'Rubik — nowoczesny',          w:[700,900]},
+  {id:'Roboto',           n:'Roboto — neutralny',          w:[300,400,500,700]},
+  {id:'Bangers',          n:'Bangers — komiks',            w:[400]},
+  {id:'Luckiest Guy',     n:'Luckiest Guy — zabawny',      w:[400]},
+  {id:'Permanent Marker', n:'Permanent Marker — marker',   w:[400]},
+  {id:'Playfair Display', n:'Playfair — elegancki',        w:[700]},
+  {id:'Caveat',           n:'Caveat — odręczny',           w:[700]}
+];
+const GF = 'https://fonts.googleapis.com/css2?family=Anton&family=Archivo+Black&family=Bangers'
+         + '&family=Bebas+Neue&family=Caveat:wght@700&family=Inter:wght@400;600;900'
+         + '&family=Luckiest+Guy&family=Montserrat:wght@700;900&family=Oswald:wght@400;600;700'
+         + '&family=Permanent+Marker&family=Playfair+Display:ital,wght@0,700;1,700'
+         + '&family=Poppins:wght@600;800&family=Rubik:wght@700;900&display=swap';
+
+function loadFonts(){
+  if(document.getElementById('wpt-gf')) return;
+  const l=document.createElement('link'); l.id='wpt-gf'; l.rel='stylesheet'; l.href=GF;
+  document.head.appendChild(l);
+  if(document.fonts && document.fonts.load){
+    Promise.all(FONTS.map(f=>document.fonts.load('700 100px "'+f.id+'"').catch(()=>{})))
+      .then(()=>{ try{ montDrawStatic(); }catch(e){} });
+  }
+}
+
+/* ── 2. MODEL TEKSTU ─────────────────────────────────────────────────────── */
+function newText(pre){
+  const t = {
+    id: (typeof montId==='function'? montId() : 't'+Date.now()),
+    text:'Twój tytuł', start:0, end:5,
+    font:'Anton', weight:400, italic:false, upper:true,
+    size:8, letter:0, lineH:1.2, align:'center', maxw:88,
+    color:'#ffffff', opacity:1, rot:0,
+    stroke:{on:true, color:'#000000', w:9},
+    shadow:{on:true, color:'#000000', blur:26, dx:0, dy:6, alpha:0.75},
+    bg:{on:false, color:'#cc0000', alpha:0.85, pad:26, radius:14, mode:'line'},
+    x:0.5, y:0.85,
+    animIn:'pop', animOut:'fade',
+    kar:{on:false, color:'#ffe600', bg:'', scale:1.08},
+    _v:2
+  };
+  if(pre) deepAssign(t, normPre(pre));
+  return t;
+}
+/* stare wywołania (pos:'bc', bg:true, shadow:false) → nowy model */
+function normPre(pre){
+  const p = Object.assign({}, pre);
+  if(typeof p.bg==='boolean')     p.bg     = {on:p.bg, color:'#cc0000', alpha:0.85, mode:'line'};
+  if(typeof p.shadow==='boolean') p.shadow = {on:p.shadow};
+  if(typeof p.stroke==='boolean') p.stroke = {on:p.stroke};
+  if(p.pos){
+    const POS={tl:[0.06,0.12],tc:[0.5,0.12],tr:[0.94,0.12],ml:[0.06,0.5],mc:[0.5,0.5],mr:[0.94,0.5],
+               bl:[0.06,0.88],bc:[0.5,0.88],br:[0.94,0.88]};
+    const q=POS[p.pos]||POS.bc;
+    if(p.x==null) p.x=q[0];
+    if(p.y==null) p.y=q[1];
+    if(p.align==null) p.align = p.pos[1]==='l'?'left':(p.pos[1]==='r'?'right':'center');
+    delete p.pos;
+  }
+  return p;
+}
+function deepAssign(dst, src){
+  Object.keys(src||{}).forEach(k=>{
+    const v=src[k];
+    if(v && typeof v==='object' && !Array.isArray(v) && dst[k] && typeof dst[k]==='object') deepAssign(dst[k], v);
+    else dst[k]=v;
+  });
+  return dst;
+}
+/* Stary model {size,color,shadow:bool,bg:bool,pos:'bc'} → nowy */
+function migrate(tx){
+  if(tx.logo) return tx;          // logo nie jest tekstem — pomijamy migrację tekstową
+  if(tx._v===2) return tx;
+  const POS={tl:[0.06,0.12],tc:[0.5,0.12],tr:[0.94,0.12],
+             ml:[0.06,0.5], mc:[0.5,0.5], mr:[0.94,0.5],
+             bl:[0.06,0.88],bc:[0.5,0.88],br:[0.94,0.88]};
+  const p=POS[tx.pos||'bc']||POS.bc;
+  const oldShadow=!!tx.shadow, oldBg=!!tx.bg, isSub=!!tx._vo || (tx.end-tx.start)<7;
+  const base=newText();
+  const keep={ id:tx.id, text:tx.text, start:tx.start, end:tx.end,
+               size:tx.size||6, color:tx.color||'#ffffff',
+               x:p[0], y:p[1], align:(tx.pos||'bc')[1]==='l'?'left':((tx.pos||'bc')[1]==='r'?'right':'center'),
+               font:'Oswald', weight:700, upper:false,
+               animIn:'fade', animOut:'fade',
+               _sub:isSub, _vo:tx._vo };
+  Object.keys(base).forEach(k=>{ if(!(k in keep)) tx[k]=base[k]; });
+  Object.assign(tx, keep);
+  tx.stroke={on:!oldBg, color:'#000000', w:oldBg?0:8};
+  tx.shadow={on:oldShadow, color:'#000000', blur:22, dx:2, dy:3, alpha:0.85};
+  tx.bg={on:oldBg, color:'#cc0000', alpha:0.85, pad:26, radius:6, mode:'line'};
+  tx.kar={on:false, color:'#ffe600', bg:'', scale:1.08};
+  tx._v=2;
+  tx._fresh=1;                       // dopiero co przeniesiony ze starego modelu
+  delete tx.pos;
+  return tx;
+}
+/* Napisy z AI/lektora wpadają w starym modelu — od razu ubieramy je
+   w styl, który redaktor wybrał ostatnio (inaczej wracały do czerwonego paska). */
+function dressFresh(){
+  const pid = MONT.preset; if(!pid) { (MONT.texts||[]).forEach(t=>delete t._fresh); return; }
+  const pr = PRESETS.find(p=>p.id===pid); if(!pr) return;
+  (MONT.texts||[]).forEach(t=>{
+    if(t._fresh && t._sub){ deepAssign(t, JSON.parse(JSON.stringify(pr.p))); }
+    delete t._fresh;
+  });
+}
+
+/* ── 3. STYLE NAPISÓW (presety) ──────────────────────────────────────────── */
+const PRESETS = [
+  { id:'opus',  n:'OPUS',      d:'Biały Inter Black + obrys, aktywne słowo na zielono',
+    p:{font:'Inter',weight:900,upper:true,size:6,letter:0,lineH:1.15,color:'#ffffff',
+       stroke:{on:true,color:'#000000',w:11}, shadow:{on:true,color:'#000000',blur:20,dx:0,dy:5,alpha:.7},
+       bg:{on:false}, kar:{on:true,color:'#22e06a',bg:'',scale:1.1}, animIn:'pop', animOut:'fade', y:0.80} },
+
+  { id:'hormo', n:'HORMOZI',   d:'Anton + żółte pudełko na aktywnym słowie',
+    p:{font:'Anton',weight:400,upper:true,size:7,letter:1,lineH:1.1,color:'#ffffff',
+       stroke:{on:true,color:'#000000',w:12}, shadow:{on:true,color:'#000000',blur:14,dx:0,dy:6,alpha:.8},
+       bg:{on:false}, kar:{on:true,color:'#111111',bg:'#ffe600',scale:1.06}, animIn:'pop', animOut:'none', y:0.78} },
+
+  { id:'karao', n:'KARAOKE',   d:'Montserrat Black, aktywne słowo na czerwono',
+    p:{font:'Montserrat',weight:900,upper:true,size:6,letter:0,lineH:1.2,color:'#ffffff',
+       stroke:{on:true,color:'#000000',w:9}, shadow:{on:true,color:'#000000',blur:18,dx:0,dy:4,alpha:.7},
+       bg:{on:false}, kar:{on:true,color:'#ff2d55',bg:'',scale:1.12}, animIn:'fade', animOut:'fade', y:0.82} },
+
+  { id:'tv',    n:'TV / SETKA',d:'Oswald na czerwonym pasku — styl Wiadomości PRO',
+    p:{font:'Oswald',weight:700,upper:false,size:4.6,letter:0,lineH:1.25,color:'#ffffff',
+       stroke:{on:false,color:'#000000',w:0}, shadow:{on:false},
+       bg:{on:true,color:'#cc0000',alpha:0.9,pad:24,radius:4,mode:'line'},
+       kar:{on:false}, animIn:'left', animOut:'fade', y:0.86} },
+
+  { id:'news',  n:'CZARNY PAS',d:'Biały tekst na czarnym pasku — czytelny wszędzie',
+    p:{font:'Inter',weight:600,upper:false,size:4.4,letter:0,lineH:1.3,color:'#ffffff',
+       stroke:{on:false}, shadow:{on:false},
+       bg:{on:true,color:'#000000',alpha:0.72,pad:22,radius:10,mode:'line'},
+       kar:{on:false}, animIn:'fade', animOut:'fade', y:0.86} },
+
+  { id:'mini',  n:'MINIMAL',   d:'Delikatny biały, bez tła i obrysu',
+    p:{font:'Inter',weight:600,upper:false,size:4.2,letter:0,lineH:1.35,color:'#ffffff',
+       stroke:{on:false}, shadow:{on:true,color:'#000000',blur:24,dx:0,dy:3,alpha:.6},
+       bg:{on:false}, kar:{on:false}, animIn:'fade', animOut:'fade', y:0.87} },
+
+  { id:'neon',  n:'NEON',      d:'Bebas + poświata cyjan',
+    p:{font:'Bebas Neue',weight:400,upper:true,size:7,letter:2,lineH:1.1,color:'#00f0ff',
+       stroke:{on:true,color:'#00363f',w:6}, shadow:{on:true,color:'#00f0ff',blur:48,dx:0,dy:0,alpha:1},
+       bg:{on:false}, kar:{on:true,color:'#ffffff',bg:'',scale:1.05}, animIn:'zoom', animOut:'fade', y:0.8} },
+
+  { id:'beast', n:'BEAST',     d:'Bangers, gruby obrys, żółte słowo — energetyczny',
+    p:{font:'Bangers',weight:400,upper:true,size:8,letter:1,lineH:1.05,color:'#ffffff',
+       stroke:{on:true,color:'#000000',w:14}, shadow:{on:true,color:'#000000',blur:10,dx:0,dy:8,alpha:.9},
+       bg:{on:false}, kar:{on:true,color:'#ffd400',bg:'',scale:1.18}, animIn:'pop', animOut:'pop', y:0.76} },
+
+  { id:'pop',   n:'POP',       d:'Luckiest Guy + czerwony obrys marki',
+    p:{font:'Luckiest Guy',weight:400,upper:false,size:7,letter:0,lineH:1.15,color:'#ffffff',
+       stroke:{on:true,color:'#cc0000',w:12}, shadow:{on:true,color:'#000000',blur:16,dx:0,dy:6,alpha:.7},
+       bg:{on:false}, kar:{on:true,color:'#ffe600',bg:'',scale:1.1}, animIn:'pop', animOut:'fade', y:0.8} },
+
+  { id:'pod',   n:'PODCAST',   d:'Poppins w zaokrąglonych pigułkach',
+    p:{font:'Poppins',weight:800,upper:false,size:5,letter:0,lineH:1.4,color:'#ffffff',
+       stroke:{on:false}, shadow:{on:true,color:'#000000',blur:20,dx:0,dy:4,alpha:.5},
+       bg:{on:true,color:'#111111',alpha:0.75,pad:26,radius:26,mode:'line'},
+       kar:{on:true,color:'#7cf3ff',bg:'',scale:1.04}, animIn:'up', animOut:'fade', y:0.84} },
+
+  { id:'cine',  n:'KINO',      d:'Playfair, kursywa, klasyczne napisy filmowe',
+    p:{font:'Playfair Display',weight:700,italic:true,upper:false,size:4,letter:1,lineH:1.35,color:'#f2ead9',
+       stroke:{on:false}, shadow:{on:true,color:'#000000',blur:20,dx:0,dy:3,alpha:.8},
+       bg:{on:false}, kar:{on:false}, animIn:'fade', animOut:'fade', y:0.9} },
+
+  { id:'title', n:'TYTUŁ 3D',  d:'Archivo Black, mocny cień — na tytuły',
+    p:{font:'Archivo Black',weight:400,upper:true,size:11,letter:0,lineH:1.05,color:'#ffffff',
+       stroke:{on:true,color:'#cc0000',w:8}, shadow:{on:true,color:'#000000',blur:0,dx:10,dy:12,alpha:1},
+       bg:{on:false}, kar:{on:false}, animIn:'zoom', animOut:'pop', y:0.5} }
+];
+
+/* ── 4. NARZĘDZIA RYSOWANIA ──────────────────────────────────────────────── */
+function hex2rgba(c, a){
+  c=String(c||'#000000');
+  if(c.indexOf('rgb')===0) return c;
+  const h=c.replace('#','');
+  const f=h.length===3 ? h.split('').map(x=>x+x).join('') : h;
+  const r=parseInt(f.substr(0,2),16)||0, g=parseInt(f.substr(2,2),16)||0, b=parseInt(f.substr(4,2),16)||0;
+  return 'rgba('+r+','+g+','+b+','+(a==null?1:a)+')';
+}
+function fontStr(tx, size){
+  return (tx.italic?'italic ':'') + (tx.weight||700) + ' ' + Math.round(size) + 'px "' + (tx.font||'Anton') + '", Oswald, Roboto, sans-serif';
+}
+function txtOf(tx){ const s=String(tx.text||''); return tx.upper ? s.toUpperCase() : s; }
+
+/* słowa z czasami — do karaoke (proporcjonalnie do długości słowa) */
+function wordsOf(tx){
+  const ws = txtOf(tx).split(/\s+/).filter(Boolean);
+  const total = ws.reduce((s,w)=>s+w.length+1, 0) || 1;
+  const st = tx.start||0, dur = Math.max(0.2, (tx.end||0)-(tx.start||0));
+  let t = st; const out=[];
+  ws.forEach(w=>{ const d = dur*((w.length+1)/total); out.push({w:w, s:t, e:t+d}); t+=d; });
+  return out;
+}
+/* łamanie na linie — z zachowaniem tokenów (słów) do karaoke */
+function wrapTokens(ctx, words, maxW, letter, spW){
+  const measure = w => ctx.measureText(w).width + (letter||0)*w.length;
+  const spaceW = (spW!=null) ? spW : measure(' ');
+  const lines=[]; let line=[], lw=0;
+  words.forEach(tok=>{
+    const w = measure(tok.w);
+    if(line.length && lw + spaceW + w > maxW){ lines.push(line); line=[tok]; lw=w; }
+    else { lw += (line.length? spaceW:0) + w; line.push(tok); }
+  });
+  if(line.length) lines.push(line);
+  return lines.length ? lines : [[{w:'',s:0,e:0}]];
+}
+function roundRect(ctx,x,y,w,h,r){
+  r=Math.min(r, h/2, w/2);
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+}
+/* rysuje słowo znak po znaku, gdy jest ustawiony odstęp liter */
+function drawWord(ctx, w, x, y, letter, mode){
+  if(!letter){ mode==='stroke'? ctx.strokeText(w,x,y) : ctx.fillText(w,x,y); return; }
+  let cx=x;
+  for(const ch of w){
+    mode==='stroke'? ctx.strokeText(ch,cx,y) : ctx.fillText(ch,cx,y);
+    cx += ctx.measureText(ch).width + letter;
+  }
+}
+function wordW(ctx, w, letter){ return ctx.measureText(w).width + (letter||0)*w.length; }
+function bgPad(tx, size){ const p=(tx.bg && tx.bg.pad!=null)? tx.bg.pad : 24; return p/100*size; }
+
+/* animacje */
+function animState(tx, t){
+  const AD=0.32, st=tx.start||0, en=(tx.end==null?1e9:tx.end);
+  let a=1, sc=1, ox=0, oy=0, reveal=1;
+  const inP  = Math.max(0, Math.min(1, (t-st)/AD));
+  const outP = Math.max(0, Math.min(1, (en-t)/AD));
+  const app=(kind,p,dir)=>{
+    switch(kind){
+      case 'fade': a=Math.min(a,p); break;
+      case 'up':   a=Math.min(a,p); oy += dir*(1-p)*0.055; break;
+      case 'down': a=Math.min(a,p); oy -= dir*(1-p)*0.055; break;
+      case 'left': a=Math.min(a,p); ox += dir*(1-p)*0.20;  break;
+      case 'right':a=Math.min(a,p); ox -= dir*(1-p)*0.20;  break;
+      case 'pop':  a=Math.min(a,Math.min(1,p*1.8)); sc *= (0.66+0.34*p) + 0.14*Math.sin(Math.PI*p); break;
+      case 'zoom': a=Math.min(a,p); sc *= 1.35-0.35*p; break;
+      case 'type': reveal=Math.min(reveal,p); break;
+      case 'none': default: break;
+    }
+  };
+  if(inP<1)  app(tx.animIn||'fade',  inP, 1);
+  if(outP<1) app(tx.animOut||'fade', outP, -1);
+  return {a, sc, ox, oy, reveal};
+}
+
+/* ── 5. RENDER TEKSTU NA KADRZE (nadpisuje montDrawTexts) ────────────────── */
+window.montDrawTexts = function(t, W, H){
+  const ctx = montCtx;
+  const list = (MONT.texts||[]);
+  list.forEach(tx=>{
+    if(tx.logo){ try{ wpDrawLogo(ctx, tx, t, W, H); }catch(e){} return; }   // LOGO marki jako element
+    migrate(tx);
+    const st=tx.start||0, en=(tx.end==null?1e9:tx.end);
+    if(t < st || t > en){ tx._bb=null; return; }
+
+    const size = Math.max(6, (tx.size||6)/100*H);
+    const letter = (tx.letter||0)/100*size;
+    const an = animState(tx, t);
+    const maxW = W * ((tx.maxw||88)/100);
+
+    ctx.save();
+    ctx.font = fontStr(tx, size);
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round'; ctx.miterLimit = 2;
+
+    let words = wordsOf(tx);
+    if(an.reveal < 1){                                   // maszyna do pisania
+      const all = words.map(w=>w.w).join(' ');
+      const n = Math.max(1, Math.round(all.length * an.reveal));
+      let left=n; words = words.filter(w=>{ if(left<=0) return false; left -= (w.w.length+1); return true; });
+    }
+    const lh = size * (tx.lineH||1.2);
+
+    // ODSTĘP MIĘDZY SŁOWAMI
+    // Powiększone słowo karaoke (scale) rozrasta się o (scale-1)/2 szerokości NA KAŻDĄ STRONĘ
+    // i wchodzi w spację — słowa się sklejały. Rezerwujemy więc miejsce z góry.
+    const kOn   = !!(tx.kar && tx.kar.on);
+    const kScl  = kOn ? (tx.kar.scale||1.08) : 1;
+    const maxWW = words.reduce((m,tk)=>Math.max(m, wordW(ctx, tk.w, letter)), 0);
+    const grow  = kOn ? (kScl-1)*maxWW/2 : 0;
+    const padW  = (kOn && tx.kar.bg) ? (bgPad(tx,size)*0.5) : 0;   // pigułka pod aktywnym słowem
+    const spW = Math.max(ctx.measureText(' ').width + letter, size*0.26) + grow + padW;
+    const lines = wrapTokens(ctx, words, maxW, letter, spW);
+
+    // wymiary bloku
+    const lineWs = lines.map(ln=>
+      ln.reduce((s,tk,i)=> s + wordW(ctx,tk.w,letter) + (i? spW:0), 0)
+    );
+    const blockW = Math.max.apply(null, lineWs.concat([1]));
+    const blockH = lines.length * lh;
+
+    const cx = (tx.x==null?0.5:tx.x)*W + an.ox*W;
+    const cy = (tx.y==null?0.85:tx.y)*H + an.oy*H;
+
+    tx._bb = { cx:cx, cy:cy, w:blockW, h:blockH, rot:(tx.rot||0), sc:an.sc, size:size };
+
+    ctx.translate(cx, cy);
+    if(tx.rot) ctx.rotate((tx.rot||0)*Math.PI/180);
+    if(an.sc!==1) ctx.scale(an.sc, an.sc);
+    ctx.globalAlpha = Math.max(0, Math.min(1, (tx.opacity==null?1:tx.opacity) * an.a));
+
+    const bg = tx.bg||{}, sh = tx.stroke||{}, sd = tx.shadow||{};
+    const pad = (bg.pad==null?24:bg.pad)/100*size;
+    const rad = (bg.radius==null?12:bg.radius)/100*size;
+
+    // ── TŁO ──
+    if(bg.on && bg.mode!=='word'){
+      ctx.fillStyle = hex2rgba(bg.color||'#000000', bg.alpha==null?0.8:bg.alpha);
+      if(bg.mode==='block'){
+        roundRect(ctx, -blockW/2-pad, -blockH/2-pad*0.5, blockW+pad*2, blockH+pad, rad);
+        ctx.fill();
+      } else {                                            // 'line' — pasek pod każdą linią
+        lines.forEach((ln,i)=>{
+          const w = lineWs[i]; if(w<=1) return;
+          const y = -blockH/2 + i*lh;
+          const x = tx.align==='left' ? -blockW/2 : (tx.align==='right' ? blockW/2 - w : -w/2);
+          roundRect(ctx, x-pad, y+lh*0.06-pad*0.5, w+pad*2, lh*0.88+pad, rad);
+          ctx.fill();
+        });
+      }
+    }
+
+    // ── LINIE TEKSTU ──
+    ctx.textAlign = 'left';
+    lines.forEach((ln,i)=>{
+      const w = lineWs[i];
+      const y = -blockH/2 + i*lh + lh/2;
+      let x = tx.align==='left' ? -blockW/2 : (tx.align==='right' ? blockW/2 - w : -w/2);
+
+      ln.forEach(tk=>{
+        const isActive = tx.kar && tx.kar.on && t>=tk.s && t<tk.e;
+        const ww = wordW(ctx, tk.w, letter);
+        const ks = isActive ? (tx.kar.scale||1.08) : 1;
+
+        ctx.save();
+        if(ks!==1){ ctx.translate(x+ww/2, y); ctx.scale(ks,ks); ctx.translate(-(x+ww/2), -y); }
+
+        // pudełko pod aktywnym słowem (Hormozi) lub tło per-słowo
+        if(isActive && tx.kar.bg){
+          ctx.fillStyle = hex2rgba(tx.kar.bg, 1);
+          roundRect(ctx, x-pad*0.45, y-size*0.62, ww+pad*0.9, size*1.24, rad*0.8);
+          ctx.fill();
+        } else if(bg.on && bg.mode==='word'){
+          ctx.fillStyle = hex2rgba(bg.color||'#000000', bg.alpha==null?0.8:bg.alpha);
+          roundRect(ctx, x-pad*0.45, y-size*0.62, ww+pad*0.9, size*1.24, rad*0.8);
+          ctx.fill();
+        }
+
+        // cień / poświata
+        if(sd.on){
+          ctx.shadowColor = hex2rgba(sd.color||'#000000', sd.alpha==null?0.8:sd.alpha);
+          ctx.shadowBlur = (sd.blur==null?20:sd.blur)/100*size;
+          ctx.shadowOffsetX = (sd.dx||0)/100*size;
+          ctx.shadowOffsetY = (sd.dy||0)/100*size;
+        } else { ctx.shadowColor='transparent'; ctx.shadowBlur=0; ctx.shadowOffsetX=0; ctx.shadowOffsetY=0; }
+
+        // obrys — na aktywnym słowie w pigułce obrys musi mieć KOLOR PIGUŁKI,
+        // inaczej czarny obrys zalewa czarny tekst i słowo robi się nieczytelne
+        if(sh.on && (sh.w||0)>0){
+          ctx.lineWidth = (sh.w/100)*size;
+          ctx.strokeStyle = (isActive && tx.kar.bg) ? tx.kar.bg : (sh.color||'#000000');
+          drawWord(ctx, tk.w, x, y, letter, 'stroke');
+        }
+        ctx.shadowColor='transparent'; ctx.shadowBlur=0; ctx.shadowOffsetX=0; ctx.shadowOffsetY=0;
+
+        // wypełnienie (+ styl akcentu słowa kluczowego: color/box/glow/underline/gradient)
+        const _kst = isActive ? (tx.kar.style || (tx.kar.bg?'box':'color')) : '';
+        if(isActive && _kst==='glow'){
+          ctx.shadowColor = hex2rgba(tx.kar.color||'#ffe600', 1);
+          ctx.shadowBlur = size*0.85; ctx.shadowOffsetX=0; ctx.shadowOffsetY=0;
+        }
+        if(isActive && _kst==='gradient'){
+          const _g=ctx.createLinearGradient(x, y-size*0.6, x, y+size*0.6);
+          _g.addColorStop(0, tx.kar.color||'#ffe600');
+          _g.addColorStop(1, tx.kar.color2||'#ff2d55');
+          ctx.fillStyle=_g;
+        } else {
+          ctx.fillStyle = isActive ? (tx.kar.color||'#ffe600') : (tx.color||'#ffffff');
+        }
+        drawWord(ctx, tk.w, x, y, letter, 'fill');
+        ctx.shadowColor='transparent'; ctx.shadowBlur=0; ctx.shadowOffsetX=0; ctx.shadowOffsetY=0;
+        if(isActive && _kst==='underline'){
+          ctx.strokeStyle = hex2rgba(tx.kar.color||'#ffe600', 1);
+          ctx.lineWidth = Math.max(2, size*0.09); ctx.lineCap='round';
+          ctx.beginPath(); ctx.moveTo(x, y+size*0.54); ctx.lineTo(x+ww, y+size*0.54); ctx.stroke();
+        }
+        ctx.restore();
+
+        x += ww + spW;
+      });
+    });
+    ctx.restore();
+  });
+
+  // ramka zaznaczenia + uchwyty (nigdy w renderze)
+  if(!MONT.rec && MONT.txtSel){
+    const tx = list.find(t2=>t2.id===MONT.txtSel);
+    if(tx && tx._bb) drawSelBox(ctx, tx);
+  }
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic'; ctx.globalAlpha=1;
+};
+})();
+</script>
+<script>
+/* Ładujemy WSZYSTKIE czcionki edytora (te same rodziny co w studio-text.js) */
+(function(){
+  const add = href => { const l=document.createElement('link'); l.rel='stylesheet'; l.href=href; document.head.appendChild(l); };
+  add('https://fonts.googleapis.com/css2?family=Anton&family=Archivo+Black&family=Bangers'
+    + '&family=Bebas+Neue&family=Caveat:wght@700&family=Inter:wght@400;600;900'
+    + '&family=Luckiest+Guy&family=Montserrat:wght@700;900&family=Oswald:wght@400;600;700'
+    + '&family=Permanent+Marker&family=Playfair+Display:ital,wght@0,700;1,700'
+    + '&family=Poppins:wght@600;800&family=Rubik:wght@700;900&display=swap');
+  add('https://fonts.googleapis.com/css2?family=Kanit:wght@600;700;900&family=Sora:wght@600;700;800'
+    + '&family=Space+Grotesk:wght@600;700&family=Manrope:wght@700;800&family=Outfit:wght@600;800'
+    + '&family=Teko:wght@600;700&family=Fredoka:wght@600;700&family=Righteous&display=swap');
+})();
+
+/* API dla Puppeteera: jeden tekst → przezroczysty PNG pełnoklatkowy (base64) */
+window.wpRenderTextPNG = async function(tx, t, W, H){
+  const cv = window.montCanvas;
+  cv.width = W; cv.height = H;
+  window.montCtx = cv.getContext('2d');
+  try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch(e){}
+  window.montCtx.clearRect(0, 0, W, H);
+  window.MONT.texts = [tx];
+  try { window.montDrawTexts(t, W, H); } catch(e){ return null; }
+  const url = cv.toDataURL('image/png');
+  return url.split(',')[1] || null;
+};
+</script>
