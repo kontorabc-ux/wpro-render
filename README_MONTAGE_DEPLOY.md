@@ -62,7 +62,7 @@ naraz — 512 MB RAM planu Free nie zniesie dwóch ffmpegów). Gotowy plik żyje
 | efekty `FX` (łańcuch CSS) | tłumaczone 1:1 (`grayscale→hue=s`, `brightness→colorchannelmixer`, `sepia→colorchannelmixer`, `blur→gblur`, `invert→lutrgb`…) |
 | `vignette/grain/mirror/duotone/vhs/glitch/leak/dreamy` | odpowiedniki ffmpeg (`vignette`, `noise`, `hflip`, `chromashift`…) |
 | `trans:'fade'` | `fade=in`/`fade=out` po 0.4 s (ta sama stała `fd`) |
-| napisy `MONT.texts` | PNG z Puppeteera (kod z `studio-text.js`) → `overlay ... enable='between(t,start,end)'` |
+| napisy `MONT.texts` | PNG **rasteryzowane w Studiu** prawdziwym `montDrawTexts` → `overlay ... enable='between(t,start,end)'` |
 | nakładka (setka/breaking) | PNG **rasteryzowany w Studiu** i wysłany w JSON-ie → `overlay` „contain" w zakresie `ovStart/ovEnd` |
 | muzyka + lektor + dźwięk klipów | `aloop`+`atrim`+`volume` → `amix` |
 
@@ -82,9 +82,24 @@ naraz — 512 MB RAM planu Free nie zniesie dwóch ffmpegów). Gotowy plik żyje
   efekty, Ken Burns, fade, muzyka → **MP4 1920×1080 h264+aac, długość dokładnie 9.000 s**
   (4 + 3 + 2 — zgodnie z `clipEffDur`), statusy i progres działają.
 - ✅ `node --check` dla `montage.js` i klienta; kod wycięty do `text-layer.html` parsuje się.
-- ⚠️ **ścieżka napisów (Puppeteer) niesprawdzona lokalnie** — piaskownica nie pobiera Chromium
-  (403). Do zweryfikowania na Render zaraz po deployu: render z jednym napisem → w statusie
-  ma NIE być `warn`, a napis ma być w kadrze.
+- ✅ ścieżka napisów z rastrem od klienta + strumieniowe pobieranie: render bez `warn`.
+
+## ⚠️ RAM: dlaczego napisów NIE renderuje Puppeteer (lekcja z 15.07)
+
+Pierwsza wersja rysowała napisy Chromium na serwerze. Render.com zabił instancję dwa razy:
+**„Ran out of memory (used over 512MB)"** — Chromium + ffmpeg nie mieszczą się na Free
+(uwaga: **Starter $7 też ma 512 MB** — RAM daje dopiero Standard 2 GB / $25).
+
+Zamiast dokładać pieniędzy zmieniliśmy architekturę:
+1. **napisy rasteryzuje Studio** (`rasterTexts` — prawdziwy `montDrawTexts` na canvasie) i wysyła
+   jako PNG w JSON-ie. Jest **wierniej** (te same fonty/presety/karaoke) i bez Chromium na serwerze.
+   Na iOS działa — Safari wywraca się na `MediaRecorder`/`ctx.filter`, nie na rysowaniu tekstu.
+2. **pobieranie materiałów strumieniowo na dysk** — `arrayBuffer()` wciągnąłby 300 MB rolki
+   z iPhone'a do RAM-u i zabił instancję niezależnie od Chromium.
+
+`text-layer.html` + `build-text-layer.mjs` zostają jako **ścieżka zapasowa** (gdy klient nie
+przyśle rastrów), ale są **wyłączone**: włącza je dopiero ENV `MONTAGE_PUPPETEER=1` — sensowne
+tylko na instancji ≥2 GB.
 
 ## Deploy
 

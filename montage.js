@@ -81,17 +81,27 @@ async function probeInfo(file) {
   };
 }
 
-/* Pobranie pliku po URL — tylko http(s), z limitem rozmiaru. */
+/* Pobranie pliku po URL — tylko http(s), z limitem rozmiaru.
+   STRUMIENIOWO na dysk: `arrayBuffer()` wciągnąłby 300 MB rolki z iPhone'a
+   do RAM-u i zabił instancję (512 MB). Piszemy kawałek po kawałku. */
 async function download(url, dest, budget) {
   if (!/^https?:\/\//i.test(url)) throw new Error('Dozwolone są tylko publiczne URL-e http(s): ' + url);
   const r = await fetch(url, { redirect: 'follow' });
   if (!r.ok) throw new Error('Nie udało się pobrać ' + url + ' (HTTP ' + r.status + ')');
   const len = Number(r.headers.get('content-length') || 0);
   if (len && len > budget.left) throw new Error('Przekroczony limit rozmiaru materiałów (' + Math.round(MAX_BYTES / 1048576) + ' MB)');
-  const buf = Buffer.from(await r.arrayBuffer());
-  budget.left -= buf.length;
-  if (budget.left < 0) throw new Error('Przekroczony limit rozmiaru materiałów');
-  await fsp.writeFile(dest, buf);
+  const out = fs.createWriteStream(dest);
+  let got = 0;
+  const reader = r.body.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    got += value.length;
+    if (got > budget.left) { out.destroy(); try { await reader.cancel(); } catch {} throw new Error('Przekroczony limit rozmiaru materiałów'); }
+    if (!out.write(Buffer.from(value))) await new Promise(res => out.once('drain', res));
+  }
+  await new Promise((res, rej) => { out.end(err => err ? rej(err) : res()); });
+  budget.left -= got;
   return dest;
 }
 
@@ -288,13 +298,34 @@ async function normalizeClip(c, file, out, W, H, job) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   2) WARSTWA TEKSTU — Puppeteer rysuje DOKŁADNIE tym samym kodem co edytor
-   (montDrawTexts wyekstrahowany do text-layer.html), więc napisy wyglądają
-   1:1 jak w podglądzie: fonty, obrys, cień, tło-pigułka, presety.
-   Każdy tekst → jeden przezroczysty PNG pełnoklatkowy → overlay z enable=.
+   2) WARSTWA TEKSTU
+   ─────────────────────────────────────────────────────────────────────────
+   ŚCIEŻKA GŁÓWNA: napisy rasteryzuje STUDIO (`tx.png` — przezroczysty PNG
+   pełnoklatkowy, narysowany prawdziwym montDrawTexts na prawdziwym canvasie).
+   Zalety: piksel w piksel jak podgląd, zero Chromium na serwerze.
+   To NIE jest optymalizacja z wygody — Chromium + ffmpeg nie mieszczą się
+   w 512 MB instancji Free („Ran out of memory", 15.07). Rysowanie tekstu na
+   canvasie działa też na iOS Safari (tam padają MediaRecorder/ctx.filter,
+   nie canvas), więc telefon nadal wysyła sam opis + kilka PNG-ów.
+
+   ŚCIEŻKA ZAPASOWA: gdy klient nie dostarczy `png`, próbujemy Puppeteera
+   (text-layer.html z kodem wyciętym ze studio-text.js) — sensowne dopiero
+   przy większej instancji.
    ══════════════════════════════════════════════════════════════════════════ */
+async function textPNGsFromClient(texts, dir) {
+  const outs = [];
+  for (let i = 0; i < texts.length; i++) {
+    const tx = texts[i];
+    if (!tx || !tx.png || !/^data:image\/png;base64,/.test(tx.png)) continue;
+    const f = path.join(dir, 'txt_' + i + '.png');
+    await fsp.writeFile(f, Buffer.from(tx.png.split(',')[1], 'base64'));
+    outs.push({ file: f, start: nz(tx.start, 0), end: nz(tx.end, nz(tx.start, 0) + 5) });
+  }
+  return outs;
+}
+
 async function renderTextPNGs(texts, W, H, dir, puppeteer) {
-  if (!texts || !texts.length) return [];
+  if (!texts || !texts.length || !puppeteer) return [];
   const html = 'file://' + path.join(__dirname, 'text-layer.html');
   const browser = await puppeteer.launch({
     args: ['--no-sandbox', '--disable-dev-shm-usage', '--font-render-hinting=none']
@@ -449,8 +480,17 @@ async function runJob(job, puppeteer, renderOverlayPNG) {
     catch (e) { job.warn = (job.warn || []).concat('Nakładka pominięta: ' + e.message); }
   }
   let textPngs = [];
-  try { textPngs = await renderTextPNGs(P.texts || [], W, H, dir, puppeteer); }
-  catch (e) { job.warn = (job.warn || []).concat('Napisy pominięte: ' + e.message); }
+  try {
+    const texts = P.texts || [];
+    const fromClient = await textPNGsFromClient(texts, dir);
+    if (fromClient.length) {
+      textPngs = fromClient;
+    } else if (texts.filter(t => !t.logo).length) {
+      // klient nie przysłał gotowych PNG — próba awaryjna przez Chromium
+      textPngs = await renderTextPNGs(texts, W, H, dir, puppeteer);
+      if (!textPngs.length) job.warn = (job.warn || []).concat('Napisy pominięte (brak rastrów ze Studia)');
+    }
+  } catch (e) { job.warn = (job.warn || []).concat('Napisy pominięte: ' + e.message); }
 
   // 4. sklejenie + przebieg finalny
   job.step = 'sklejanie'; job.progress = 0.58;
@@ -468,7 +508,11 @@ async function runJob(job, puppeteer, renderOverlayPNG) {
 
 /* ── Montaż endpointów (additywnie do istniejącego app) ─────────────────── */
 export function mountMontage(app, opts = {}) {
-  const { puppeteer, renderOverlayPNG, token = process.env.RENDER_TOKEN || '' } = opts;
+  const { renderOverlayPNG, token = process.env.RENDER_TOKEN || '' } = opts;
+  // Chromium na serwerze TYLKO na wyraźne życzenie: na instancji 512 MB
+  // Puppeteer + ffmpeg = „Ran out of memory". Domyślnie napisy przychodzą
+  // gotowe ze Studia (patrz sekcja 2).
+  const puppeteer = process.env.MONTAGE_PUPPETEER === '1' ? opts.puppeteer : null;
 
   // CORS — Studio (www.wiadomosci.pro) woła ten serwis wprost z przeglądarki
   const ORIGINS = (process.env.CORS_ORIGINS ||
