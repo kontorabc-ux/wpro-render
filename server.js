@@ -17,6 +17,7 @@ import fs from 'fs';
 import os from 'os';
 import { spawn } from 'child_process';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { mountMontage } from './montage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -133,3 +134,10 @@ app.get('/overlay-video', async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`WPRO render-service na :${PORT}`));
+
+
+// ── RENDER SERWEROWY MONTAZU (POST /montage) — dolozone 2026-07-15, additywnie
+// Studio wysyla opis montazu (JSON), serwer sklada MP4 natywnym ffmpeg.
+// Naprawia iPhone'a (Safari nie ma MediaRecorder/ctx.filter) i dlugie filmy.
+app.use('/montage', express.json({ limit: '32mb' }));
+mountMontage(app, { puppeteer, token: TOKEN });
