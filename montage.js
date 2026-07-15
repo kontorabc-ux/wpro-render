@@ -583,9 +583,17 @@ export function mountMontage(app, opts = {}) {
     if (!auth(req, res)) return;
     const j = jobs.get(req.params.id);
     if (!j || j.status !== 'done' || !j.file) return res.status(404).send('Render niegotowy');
+    // sendFile obsługuje nagłówek Range — bez tego <video> wisi na wieczystym
+    // ładowaniu (readyState=0, networkState=2): odtwarzacz Chrome prosi
+    // o zakresy bajtów, a goły stream ich nie umie. „attachment" tylko na
+    // wyraźne żądanie (?download=1), żeby podgląd w karcie działał.
     res.setHeader('Content-Type', 'video/mp4');
-    res.setHeader('Content-Disposition', 'attachment; filename="wiadomosci-pro-montaz.mp4"');
-    fs.createReadStream(j.file).pipe(res);
+    res.setHeader('Accept-Ranges', 'bytes');
+    if (req.query.download === '1')
+      res.setHeader('Content-Disposition', 'attachment; filename="wiadomosci-pro-montaz.mp4"');
+    res.sendFile(j.file, { acceptRanges: true }, err => {
+      if (err && !res.headersSent) res.status(500).end();
+    });
   });
 
   app.delete('/montage/:id', async (req, res) => {
