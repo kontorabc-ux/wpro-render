@@ -46,6 +46,21 @@ const THREADS    = process.env.FF_THREADS || '2';
 const X264 = () => ['-threads', THREADS, '-x264-params',
   'threads=' + THREADS + ':lookahead-threads=1:sliced-threads=0'];
 
+/* ── „UTNIJ FILM DO NARRACJI" (dodane 16.07.2026) ─────────────────────────
+   Problem z LIVE: długość filmu = SUMA długości klipów (patrz `total` w runJob),
+   więc gdy obraz jest dłuższy niż mowa (np. nagranie prezentera, gdzie kamera
+   nagrywa dalej po ostatnim zdaniu), na końcu zostaje CICHY OGON. Zmierzone na
+   realnym pliku: 50,1 s obrazu / 30,2 s dźwięku, mowa kończy się na 29,3 s.
+   Ta poprawka wykrywa realny koniec narracji i przycina do niego OBRAZ.
+   Sterowanie: FIT_TO_AUDIO=0 wyłącza (domyślnie WŁĄCZONE). Nigdy nie wydłuża
+   filmu i nigdy nie tnie mowy (pad + minimum + próg oszczędności). */
+const FIT_TO_AUDIO = process.env.FIT_TO_AUDIO !== '0';
+const FIT_MIN_FILM = Number(process.env.FIT_MIN_FILM || 3);    // nie tnij poniżej [s]
+const FIT_PAD      = Number(process.env.FIT_PAD || 0.6);       // oddech po ostatnim słowie [s]
+const FIT_MIN_GAIN = Number(process.env.FIT_MIN_GAIN || 1.0);  // tnij tylko, gdy urwiemy > tyle [s]
+const FIT_SIL_DB   = process.env.FIT_SIL_DB || '-40dB';        // próg ciszy
+const FIT_SIL_MIN  = Number(process.env.FIT_SIL_MIN || 0.6);   // min. długość ciszy [s]
+
 const jobs = new Map();
 let queue = Promise.resolve();
 
@@ -443,6 +458,63 @@ async function finalPass(job, dir, base, overlayPng, textPngs, total, W, H) {
   return out;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   „UTNIJ FILM DO NARRACJI" — realny koniec mowy, nie koniec taśmy.
+   ─────────────────────────────────────────────────────────────────────────
+   Dwa scenariusze, jedna funkcja:
+   1) jest OSOBNY lektor (P.vo) → film ma trwać tyle co lektor;
+   2) narracją jest DŹWIĘK KLIPÓW (nagranie prezentera) → szukamy ostatniego
+      momentu mowy przez silencedetect na sklejonym materiale i tam kończymy.
+   Zwraca sekundę końca narracji (bez padu) albo 0, gdy nie ma czego przycinać.
+   ══════════════════════════════════════════════════════════════════════════ */
+/* Długość SAMEJ ścieżki audio (nie kontenera!). Gdy obraz jest dłuższy od
+   dźwięku, format.duration pokazuje długość obrazu — a nas interesuje audio. */
+function audioStreamDur(file) {
+  return new Promise(resolve => {
+    const p = spawn('ffprobe', ['-v', 'error', '-select_streams', 'a:0',
+      '-show_entries', 'stream=duration', '-of',
+      'default=nokey=1:noprint_wrappers=1', file]);
+    let out = '';
+    p.stdout.on('data', d => out += d);
+    p.on('close', () => { const v = parseFloat(out); resolve(Number.isFinite(v) && v > 0 ? v : 0); });
+    p.on('error', () => resolve(0));
+  });
+}
+
+async function narrationEnd(job, base) {
+  const P = job.project;
+  // 1) osobny lektor rządzi długością filmu
+  if (P.vo && P.vo.url && job.files && job.files.vo) {
+    const a = await audioStreamDur(job.files.vo);
+    if (a > 0) return a;
+    const i = await probeInfo(job.files.vo);
+    if (i.dur > 0) return i.dur;
+  }
+  // 2) narracja = audio klipów; ostatni niecichy punkt przez silencedetect
+  const info = await probeInfo(base);
+  if (!info.hasAudio) return 0;
+  // długość ścieżki audio: preferuj stream=duration, w ostateczności kontener
+  let aDur = await audioStreamDur(base);
+  let lastStart = null, lastEnd = null;
+  await ffmpeg(
+    ['-i', base, '-map', '0:a', '-af',
+     'silencedetect=noise=' + FIT_SIL_DB + ':d=' + FIT_SIL_MIN, '-f', 'null', '-'],
+    { onLine: line => {
+        const s = /silence_start:\s*(-?[\d.]+)/.exec(line);
+        if (s) lastStart = Math.max(0, Number(s[1]));
+        const e = /silence_end:\s*(-?[\d.]+)/.exec(line);
+        if (e) lastEnd = Number(e[1]);
+      } }
+  );
+  if (!(aDur > 0)) aDur = Math.max(info.dur, lastEnd || 0);   // brak stream=duration → z ciszy/kontenera
+  if (!(aDur > 0)) return 0;
+  // Ostatnia cisza sięgająca końca ścieżki (lastEnd ≈ aDur) = OGON → mowa
+  // skończyła się na lastStart. Jeśli po ciszy mowa wróciła (lastEnd < aDur),
+  // narracja trwa do końca ścieżki audio.
+  const reachesEnd = lastStart != null && (lastEnd == null || lastEnd >= aDur - 0.35 || lastEnd <= lastStart);
+  return reachesEnd ? lastStart : aDur;
+}
+
 /* ── Główny bieg zadania ────────────────────────────────────────────────── */
 async function runJob(job, puppeteer, renderOverlayPNG) {
   const P = job.project;
@@ -506,7 +578,25 @@ async function runJob(job, puppeteer, renderOverlayPNG) {
   // 4. sklejenie + przebieg finalny
   job.step = 'sklejanie'; job.progress = 0.58;
   const base = parts.length === 1 ? parts[0] : await concatParts(parts, dir);
-  const total = P.clips.reduce((s, c) => s + clipEffDur(c), 0);
+  let total = P.clips.reduce((s, c) => s + clipEffDur(c), 0);
+
+  // „utnij film do narracji": jeśli obraz jest wyraźnie dłuższy niż mowa,
+  // przycinamy do końca narracji + oddech. Wszystko w try/catch — gdyby
+  // wykrywanie zawiodło, film wychodzi jak dotąd (pełna długość), tylko z warn.
+  if (FIT_TO_AUDIO) {
+    try {
+      const nar = await narrationEnd(job, base);
+      const target = nar + FIT_PAD;
+      if (nar > 0 && target >= FIT_MIN_FILM && target < total - FIT_MIN_GAIN) {
+        job.warn = (job.warn || []).concat(
+          'Film przycięty do narracji: ' + total.toFixed(1) + ' s → ' + target.toFixed(1) + ' s');
+        total = target;
+      }
+    } catch (e) {
+      job.warn = (job.warn || []).concat('Dopasowanie do narracji pominięte: ' + e.message);
+    }
+  }
+
   job.step = 'render finalny';
   const final = await finalPass(job, dir, base, overlayPng, textPngs, total, W, H);
 
