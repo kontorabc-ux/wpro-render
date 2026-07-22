@@ -212,23 +212,39 @@ function clipGeom(c, sw, sh, W, H) {
   return { dx: Math.round(dx), dy: Math.round(dy), dw: Math.round(dw), dh: Math.round(dh) };
 }
 
-/* Ken Burns → zoompan (te same wzory co kbGeom w studio-text.js) */
+/* Ken Burns → zoompan (te same wzory/siły co kbGeom w studio-text.js).
+   Siły wzmocnione 21.07.2026 (feedback Bartka: ruch był ~9% i niewidoczny):
+   zoom 0.20→0.45 (~2.25×), pan 0.14→0.22 (~1.6×), diag zoom 0.10/0.12→0.22/0.27,
+   diag pan 0.10/0.08→0.17/0.14. TE SAME liczby co w podglądzie kbGeom.
+   OKNO CZASOWE: opcjonalne c.kbStart/c.kbDur (0..1) — postęp `p` liczony w oknie
+   [kbStart, kbStart+kbDur] i przycięty clip(...,0,1) (poza oknem: stan brzegowy,
+   dokładnie jak w podglądzie). Brak pól => start=0,dur=1 (zachowanie jak dziś).
+   PRĘDKOŚĆ: opcjonalne c.kbSpeed (0..100, default 50=liniowo) → sp 0..2, easing
+   pow(clip(...),1/sp). Brak pola => sp=1 (liniowo). TE SAME wzory co w podglądzie. */
 function kenBurns(c, eff, W, H) {
   const mode = c.kb || 'none';
   if (mode === 'none' || !mode) return null;
   const k = nz(c.kbs, 45) / 100;
   const n = Math.max(1, Math.round(eff * FPS));
-  const p = 'on/' + n;                                   // postęp 0..1 wg numeru klatki
+  // okno czasowe [st, st+du] w ułamkach klipu (defensywnie, jak kbGeom w podglądzie)
+  let st = Math.max(0, Math.min(1, nz(c.kbStart, 0)));
+  let du = Math.max(0, Math.min(1, nz(c.kbDur, 1)));
+  if (st + du > 1) du = 1 - st;
+  if (du <= 0) du = 0.001;                                // uniknij dzielenia przez 0 w expr
+  // PRĘDKOŚĆ: sp 0..2 (1=liniowo), easing = pow(p, 1/sp) — jak w podglądzie kbGeom
+  const sp = Math.max(0.15, Math.max(0, Math.min(100, nz(c.kbSpeed, 50))) / 50);
+  // postęp 0..1 W OKNIE + krzywa tempa; commas w clip()/pow() chronione przez '...' wokół z/x/y
+  const p = 'pow(clip((on/' + n + '-' + st + ')/' + du + ',0,1),' + (1 / sp) + ')';
   let z, x, y;
   switch (mode) {
-    case 'zin':  z = '1+' + (0.20 * k) + '*' + p; x = 'iw/2-(iw/zoom/2)'; y = 'ih/2-(ih/zoom/2)'; break;
-    case 'zout': z = '1+' + (0.20 * k) + '*(1-' + p + ')'; x = 'iw/2-(iw/zoom/2)'; y = 'ih/2-(ih/zoom/2)'; break;
-    case 'panL': z = String(1 + 0.14 * k); x = '(iw-iw/zoom)*(1-' + p + ')'; y = 'ih/2-(ih/zoom/2)'; break;
-    case 'panR': z = String(1 + 0.14 * k); x = '(iw-iw/zoom)*' + p;         y = 'ih/2-(ih/zoom/2)'; break;
-    case 'panU': z = String(1 + 0.14 * k); x = 'iw/2-(iw/zoom/2)'; y = '(ih-ih/zoom)*(1-' + p + ')'; break;
-    case 'panD': z = String(1 + 0.14 * k); x = 'iw/2-(iw/zoom/2)'; y = '(ih-ih/zoom)*' + p; break;
-    case 'diag': z = '1+' + (0.10 * k) + '+' + (0.12 * k) + '*' + p; x = '(iw-iw/zoom)*' + p; y = '(ih-ih/zoom)*' + p; break;
-    default: return null;                                 // shake/pulse/swing — v1 bez ruchu
+    case 'zin':  z = '1+' + (0.45 * k) + '*' + p; x = 'iw/2-(iw/zoom/2)'; y = 'ih/2-(ih/zoom/2)'; break;
+    case 'zout': z = '1+' + (0.45 * k) + '*(1-' + p + ')'; x = 'iw/2-(iw/zoom/2)'; y = 'ih/2-(ih/zoom/2)'; break;
+    case 'panL': z = String(1 + 0.22 * k); x = '(iw-iw/zoom)*(1-' + p + ')'; y = 'ih/2-(ih/zoom/2)'; break;
+    case 'panR': z = String(1 + 0.22 * k); x = '(iw-iw/zoom)*' + p;         y = 'ih/2-(ih/zoom/2)'; break;
+    case 'panU': z = String(1 + 0.22 * k); x = 'iw/2-(iw/zoom/2)'; y = '(ih-ih/zoom)*(1-' + p + ')'; break;
+    case 'panD': z = String(1 + 0.22 * k); x = 'iw/2-(iw/zoom/2)'; y = '(ih-ih/zoom)*' + p; break;
+    case 'diag': z = '1+' + (0.22 * k) + '+' + (0.27 * k) + '*' + p; x = '(iw-iw/zoom)*' + p; y = '(ih-ih/zoom)*' + p; break;
+    default: return null;                                 // shake/pulse/swing — v1 bez ruchu (okno ich nie dotyczy)
   }
   return "zoompan=z='" + z + "':x='" + x + "':y='" + y + "':d=1:s=" + W + 'x' + H + ':fps=' + FPS;
 }
